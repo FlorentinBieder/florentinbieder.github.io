@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROC and PR Curve</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column; /* stack elements vertically */
+            align-items: center; /* center horizontally */
+            margin: 0;
+            /*background-color: #eee;*/
+            background-color: color-mix(in srgb, #add8e6, white 80%);
+            padding-top: 20px;
+        }
+
+        h1 {
+            margin-bottom: 20px; /* space between the title and the grid */
+            font-size: 32px; 
+            color: #333; 
+        }
+
+        .scroll-container {
+            overflow-x: auto; /* enable horizontal scrolling */
+            width: 100%; /* full width of the viewport */
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(2, 480px); /* set width of column */
+            /*grid-template-rows: repeat(2, 480px); /* set height of ach row */
+            gap: 10px; 
+            justify-content: center; /* center grid container horizontally */
+            min-width: 1280px; /* minimum width to accommodate grid */
+        }
+
+        .grid-item {
+            display: block;
+            /*justify-content: center;*/
+            align-items: center;
+            background-color: #add8e6; 
+            color: #111; 
+            font-size: 12px;
+            border-radius: 5px; 
+            width: 480px; /* set width of each item */
+            /*height: 480px; /* set height of each item */
+        }
+        .grid-item > h2, .grid-item > div {
+            padding-left: 20px;
+        }
+        .grid-item > canvas {
+            padding-left: 20px;
+        }
+
+        .grid-item:nth-child(4) {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            align-items: start;
+            grid-auto-rows: max-content;
+        }
+        #controls {
+            grid-column: span 2;
+        }
+        #presets {
+            grid-column: span 1;
+        }
+        #metrics {
+            grid-column: span 1;
+        }
+
+
+
+
+        #distributions {
+            border-collapse: separate;
+            border-spacing: 0; 
+            background-color: none;
+            width:90%;
+        }
+        #distributions td {
+            width: 33%;
+            border: none;/* 1px solid black;*/
+            background-color: color-mix(in srgb, #add8e6, white 20%);
+            font-size:8pt;
+        }
+        #distributions tr:nth-child(even) td:nth-child(odd), 
+        #distributions tr:nth-child(odd) td:nth-child(even)  {
+            background-color: color-mix(in srgb, #add8e6, black 10%);
+        }
+        #distributions tr:first-child td:first-child {
+            border: none;
+            opacity: 0;
+        }
+        #distributions tr td { 
+            /* #distributions tr td:first-child, #distributions tr:first-child td { */
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+        #distributions input {
+            width: 100%;
+        }
+        #distributions tr:first-child td:nth-child(2) {
+            border-top-left-radius: 10px;
+        }
+        #distributions tr:nth-child(2) td:first-child {
+            border-top-left-radius: 10px;
+        }
+        #distributions tr:first-child td:last-child {
+            border-top-right-radius: 10px;
+        }
+        #distributions tr:last-child td:first-child {
+            border-bottom-left-radius: 10px;
+        }
+        #distributions tr:last-child td:last-child {
+            border-bottom-right-radius: 10px;
+        }
+	</style>
+</head>
+<body>
+    <div class="title">
+        <h1>Receiver Operating Characteristic and Precision-Recall Curve</h1>
+    </div>
+
+<div class="grid-container">
+    <div class="grid-item">
+        <h2>Precision Recall Curve</h2>
+        <canvas id="canvaspr" width="480" height="360"></canvas>
+    </div>
+    <div class="grid-item">
+        <h2>Receiver Operating Characteristic</h2>
+        <canvas id="canvasroc" width="480" height="360"></canvas>
+    </div>
+    <div class="grid-item">
+        <h2>Data</h2>
+        <canvas id="canvasdata" width="480" height="360"></canvas>
+    </div>
+    <div class="grid-item">
+        <div id="controls">
+        <h2>Controls</h2>
+            <table id="distributions">
+                <tr>
+                    <!--
+                    <td> </td>
+                    <td> #Samples </td>
+                    <td> Distribution Width </td>
+                    <td> Distribution Position </td>
+                    -->
+                    <td> </td>
+                    <td> Positive </td>
+                    <td> Negative</td>
+
+                </tr>
+                <tr>
+                    <td> #Samples </td>
+                    <td>
+                        <!--<label for="sliderpositive">#Samples</label>-->
+                        <input type="range" id="sliderpositive" min="1" max="100" step="1" value="37">
+                    </td>
+                    <td>
+                        <!--<label for="slidernegative">#Samples</label>-->
+                        <input type="range" id="slidernegative" min="1" max="100" step="1" value="42">
+                    </td>
+                </tr>
+                <tr>
+                    <td> Distribution Width: </td>
+                    <td>
+                        <!--<label for="sliderpositivewidth">Distribution Width</label>-->
+                        <input type="range" id="sliderpositivewidth" min="0" max="1" step="0.01" value="0.8">
+                    </td>
+
+                    <td>
+                        <!--<label for="slidernegativewidth">Distribution Width</label>-->
+                        <input type="range" id="slidernegativewidth" min="0" max="1" step="0.01" value="0.8">
+                    </td>
+                </tr>
+                <tr>
+                    <td> Distribution Position </td>
+                    <td>
+                        <!--<label for="sliderpositiveposition">Distribution Position</label>-->
+                        <input type="range" id="sliderpositiveposition" min="0" max="1" step="0.01" value="1">
+                    </td>
+                    <td>
+                        <!--<label for="slidernegativeposition">Distribution Position</label>-->
+                        <input type="range" id="slidernegativeposition" min="0" max="1" step="0.01" value="0">
+                    </td>
+                </tr>
+                <tr>
+                    <td> Class Balance </td>
+                    <td colspan="2">
+                        <input type="range" id="sliderbalance" min="0" max="1" step="0.01" value="1">
+                    </td>
+                </tr>
+                <tr>
+                    <td> Total #Samples </td>
+                    <td colspan="2">
+                        <input type="range" id="slidersamples" min="2" max="200" step="1" value="50">
+                    </td>
+                </tr>
+                <tr>
+                    <td> <label for="sliderseed">RNG Seed</label> </td>
+                    <td colspan="2">
+                        <input type="range" id="sliderseed" min="0" max="1" step="0.01" value="0">
+                    </td>
+                </tr>
+                <tr>
+                    <td> <label for="sliderthreshold">Threshold:</label> </td>
+                    <td colspan="2">
+                        <input type="range" id="sliderthreshold" min="0" max="1" step="0.01" value="0.5">
+                    </td>
+                </tr>
+            
+            </table>
+            
+
+        </div>
+        <div id="presets">
+        <h2>Presets</h2>
+            <table>
+                <tr><td><input type="radio" id="preset0" name="preset" value="0" checked /><label for="preset0">none</label></td></tr>
+                <tr><td><input type="radio" id="preset1" name="preset" value="1" /><label for="preset1">perfect separability</label></td></tr>
+                <tr><td><input type="radio" id="preset2" name="preset" value="2" /><label for="preset2">worse than random</label></td></tr>
+                <tr><td><input type="radio" id="preset3" name="preset" value="3" /><label for="preset3">high prevalence</label></td></tr>
+                <tr><td><input type="radio" id="preset4" name="preset" value="4" /><label for="preset4">random classifier</label></td></tr>
+            </table>
+            <p><br/>Author: Florentin Bieder</p>
+        </div>
+        <div id="metrics">
+            <h2>Metrics</h2>
+            <table>
+                <tr><td>ACC=(TP+TN)/Total</td><td><span id="metricacc"></span></td><td><input type="checkbox" id="checkboxacc"></td></tr>
+                <tr><td>FPR=FP/N</td><td><span id="metricfpr"></span></td><td></td></tr>
+                <tr><td>TPR=TP/P</td><td><span id="metrictpr"></span></td><td></td></tr>
+                <tr><td>Precision=TP/(TP+FP)</td><td><span id="metricprecision"></span></td><td></td></tr>
+                <tr><td>Recall=TPR</td><td><span id="metricrecall"></span></td><td></td></tr>
+                <tr><td>F1=2TP/(FP+2TP+FN)</td><td><span id="metricf1"></span></td><td><input type="checkbox" id="checkboxf1"></td></tr>
+                <tr><td>AUROC</td><td><span id="metricauroc"></span></td><td></td></tr>
+                <tr><td>AUPR</td><td><span id="metricaupr"></span></td><td></td></tr>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    /*
+    TODO:
+    - toggles
+    - color scheme?
+    */
+    // get the 2D context of each canvas
+    const canvaspr = document.getElementById('canvaspr');
+    const ctxpr = canvaspr.getContext('2d');
+    const canvasroc = document.getElementById('canvasroc');
+    const ctxroc = canvasroc.getContext('2d');
+    const canvasdata = document.getElementById('canvasdata');
+    const ctxdata = canvasdata.getContext('2d');
+
+    // Get the sliders
+    const sliderthreshold = document.getElementById('sliderthreshold');
+    const sliderpositive = document.getElementById('sliderpositive');
+    const slidernegative = document.getElementById('slidernegative');
+    const sliderseed = document.getElementById('sliderseed');
+    const sliderbalance = document.getElementById('sliderbalance');
+    const slidersamples = document.getElementById('slidersamples');
+    const slidernegativewidth    =  document.getElementById('slidernegativewidth');
+    const slidernegativeposition =  document.getElementById('slidernegativeposition');
+    const sliderpositivewidth    =  document.getElementById('sliderpositivewidth');
+    const sliderpositiveposition =  document.getElementById('sliderpositiveposition');
+    const checkboxacc    =  document.getElementById('checkboxacc');
+    const checkboxf1     =  document.getElementById('checkboxf1');
+
+    // settings
+    const width=480;
+    const height=360;
+    let origin = [width*0.15, height*0.95];
+    let scale = 400*480/640*0.95;
+    const histBinCount = 24;
+    const background_color = getComputedStyle(document.querySelector('.grid-item')).backgroundColor;
+    const color = {
+        background: background_color,
+        /*
+        tp: '#00f',
+        fn: '#f66',
+        fp: '#66f',
+        tn: '#f00',
+        */
+        /*
+        tp: `hsl(from ${background_color} calc(h + 180 + 33) calc(s + 40) calc(l - 30))`,
+        fp: `hsl(from ${background_color} calc(h + 180 + 33) calc(s + 40) calc(l - 30))`,
+        fn: `hsl(from ${background_color} calc(h + 180 - 30) calc(s + 40) l)`,
+        tn: `hsl(from ${background_color} calc(h + 180 - 30) calc(s + 40) l)`,
+        //*/
+        tp: `hsl(from ${background_color} calc(h + 180 + 33) 100% 40%)`,
+        fp: `hsl(from ${background_color} calc(h + 180 + 33) 100% 40%)`,
+        fn: `hsl(from ${background_color} calc(h + 180 - 30) 80% 50%)`,
+        tn: `hsl(from ${background_color} calc(h + 180 - 30) 80% 50%)`,
+        curve: 'black',
+        auc: '#00000028',
+        points: 'black',
+        //threshold: `hsl(from ${background_color} calc(h + 180) 100% 70%)`,
+        threshold: `hsl(from blue h 90% 60%)`,
+        //threshold: 'blue',
+        //threshold: `color-mix(in srgb, ${getComputedStyle(document.querySelector('.grid-item')).backgroundColor}, black 30%)`,
+        //threshold: `saturate(${getComputedStyle(document.querySelector('.grid-item')).backgroundColor}, 30%)`,
+        //threshold: `hsl(from ${getComputedStyle(document.querySelector('.grid-item')).backgroundColor} h calc(s + 10) calc(l - 5))`,
+        acc0: 'red',
+        //acc05: 'gray',
+        acc1: 'green',
+        hists: ['#ccc', '#ccc'],
+        // others
+        curveLineWidth:3,
+        curvePointRadius: 3,
+        thresholdPointRadius: 8
+    };
+    //document.querySelector('.grid-item:first-child').style.backgroundColor = color.threshold;
+
+    // helper functions
+    function getAccColor(acc100){
+        /* accuracy in percentage from 0 to 100 */
+        //return `color-mix(in lab, ${acc100 > 50 ? color.acc1 : color.acc0} ${Math.abs(2*acc100-100)}%, ${color.acc05})`;
+        //return `color-mix(in hsl, ${acc100 > 50 ? color.acc1 : color.acc0} ${Math.abs(2*acc100-100)}%, ${color.acc05})`;
+        return `color-mix(in hsl, ${color.acc1} ${acc100}%, ${color.acc0})`;
+    }
+    function make_rng(seed){
+        let state = seed % 1;
+        const phi = (Math.sqrt(5)-1)/2;
+        return function(){
+            state += phi;
+            state %= 1;
+            return state+0.0;
+        }
+    }
+    function drawCS(ctx){
+        ctx.fillStyle = getComputedStyle(document.querySelector('body')).backgroundColor;
+        ctx.fillRect(...toPlot([0,0]), ...toPlot([1,1], 0));
+        ctx.fillStyle = 'black';
+        ctx.beginPath()
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'black';
+        ctx.setLineDash([]);
+        ctx.beginPath()
+        ctx.moveTo(...toPlot([0,0]))
+        ctx.lineTo(...toPlot([0,1.1]))
+        ctx.moveTo(...toPlot([0,0]))
+        ctx.lineTo(...toPlot([1.1,0]))
+        ctx.stroke()
+        ctx.strokeStyle = 'black';
+        ctx.setLineDash([10, 10]);
+        ctx.beginPath()
+        ctx.moveTo(...toPlot([0,1]))
+        ctx.lineTo(...toPlot([1,1]))
+        ctx.lineTo(...toPlot([1,0]))
+        ctx.stroke()
+        ctx.setLineDash([]);
+    }
+
+    function get_roc(points){ // [[prediction score, true label]]
+        points = points.toSorted((a, b)=>b[0]-a[0]); //sort by decreasing scores
+        let fp = 0, tp = 0;
+        let n = points.filter(p=>p[1] < 0.5).length;
+        let p = points.length - n;
+        //console.log('get_roc', 'n', n, 'p', p)
+        let roc_curve = [[0,0,1]];
+        let pr_curve = [[0,1,1]];
+        let fprev = 1;
+        let i = 0;
+        points.forEach(function(point){
+            if(point[0] != fprev){
+                roc_curve.push([fp/n, tp/p, point[0]]);
+                pr_curve.push([tp/p, ((tp+fp)!=0)?tp/(tp+fp):1, point[0]]);
+            } 
+            fprev = point[0];
+            if(point[1] > 0.5){
+                tp += 1;
+            } else {
+                fp += 1;
+            }
+        })
+        //roc_curve.push([fp/n, tp/p, fprev]);
+        roc_curve.push([1, 1, 0]);
+        //pr_curve.push([tp/p, tp/(tp+fp), fprev]);
+        pr_curve.push([1, p/(n+p), 0])
+
+        return {roc: roc_curve, pr: pr_curve};
+    }
+
+    function toPlot(x, absolute=1){
+        /* converts 0-1 coordinate system to canvas cordinate system */
+        return [origin[0]*absolute+scale*x[0], origin[1]*absolute-scale*x[1]];
+    }
+    function auc(curve){ 
+        /* computes area under curve, assuming curve is sorted from left to right*/
+        let area = 0;
+        for(let i=0; i<curve.length-1;i++){
+            let p = curve[i];
+            let q = curve[i+1];
+            let dx = q[0] - p[0];
+            let dy = (q[1] + p[1])/2; //trapezoid
+            area += dx * dy;
+        }
+        return area;
+    }
+    function get_metrics(threshold, data){
+        const d = data.map(x=>[x[0] > threshold | 0, x[1]])
+        const fp = d.reduce((a,x)=>a + (x[0]==1 && x[1]==0), 0);
+        const fn = d.reduce((a,x)=>a + (x[0]==0 && x[1]==1), 0);
+        const tp = d.reduce((a,x)=>a + (x[0]==1 && x[1]==1), 0);
+        const tn = d.reduce((a,x)=>a + (x[0]==0 && x[1]==0), 0);
+        //console.log('metrics', fp, fn, tp, tn)
+        const p = tp+fn;
+        const n = tn+fp;
+        const total = p+n;
+        const curves = get_roc(data);
+        //console.log('curves')
+        //console.log(curves)
+        const out = {
+            fp: fp, fn: fn, tp: tp, tn: tn,
+            acc: (tp+tn)/total,
+            prevalence: p/total,
+            f1: 2*tp/(fp+2*tp+fn),
+            precision: tp/(tp+fp+1e-16),
+            recall: tp/p,
+            tpr: tp/p,
+            fpr: fp/n,
+            auroc: auc(curves.roc),
+            aupr: auc(curves.pr),
+            roc_curve: curves.roc,
+            pr_curve: curves.pr
+        };
+        return out;
+    }
+    function interpolate(x, xp, yp){ 
+        // assume that xp is sorted in descending order
+        console.assert(xp.length == [...new Set(xp)].length, 'doubles present')
+        if(xp[0] != 1){console.log('first is not 1')}
+        if(xp[xp.length-1] != 0){console.log('last is not 0')}
+        let k=1;
+        for(; k<xp.length;k++){
+            if(xp[k] <= x){
+                break;
+            }
+        }
+        y = (x - xp[k-1])/(xp[k]-xp[k-1]) * yp[k] + (x-xp[k])/(xp[k-1]-xp[k]) * yp[k-1];
+        return y;
+    }
+
+    // callback function to handle slider changes
+    // this function does all the drawing and heavy lifting
+    function handleSliderChange(source='') {
+        const threshold = sliderthreshold.value;
+        let   negative = parseInt(slidernegative.value);
+        let   positive = parseInt(sliderpositive.value);
+        let   balance = parseFloat(sliderbalance.value);
+        let   samples = parseInt(slidersamples.value);
+        const seed = parseFloat(sliderseed.value);
+        const negative_width    = parseFloat(slidernegativewidth.value);
+        const negative_position = parseFloat(slidernegativeposition.value);
+        const positive_width    = parseFloat(sliderpositivewidth.value);
+        const positive_position = parseFloat(sliderpositiveposition.value);
+        const rng_positive = make_rng(seed);
+        const rng_negative = make_rng(seed+0.1);
+        /* handle case */
+        if (source === 'balance' || source === 'samples'){
+            /* update positive and negative values */
+            negative = 1 + (samples-2)*balance;
+            positive = samples - negative;
+            sliderpositive.value = positive;
+            slidernegative.value = negative;
+            //TODO update sliders?
+        } else {
+            /* update balance and samples */
+            samples = negative + positive;
+            balance = negative/samples;
+            slidersamples.value = samples;
+            sliderbalance.value = balance;
+        }
+
+        /* set up data
+        * we have two traingular distributions with position and width parameters
+        */
+        const total = negative+positive;
+        const data = [];
+        for(let k=0; k<negative; k++){
+            data.push([(rng_negative()+rng_negative())/2*negative_width + negative_position*(1-negative_width), 0]);
+        } 
+        for(let k=0; k<positive; k++){
+            data.push([(rng_positive()+rng_positive())/2*positive_width + positive_position*(1-positive_width), 1]);
+        } 
+        // compute metrics
+        const metrics = get_metrics(threshold, data);
+        console.log('metrics')
+        console.log(metrics)
+
+        //clear plots
+        ctxpr.clearRect(0, 0, canvaspr.width, canvaspr.height);
+        ctxroc.clearRect(0, 0, canvasroc.width, canvasroc.height);
+        ctxdata.clearRect(0, 0, canvasdata.width, canvasdata.height);
+
+        /* draw coordinate systems */
+        /*****************************
+        * draw data
+        ******************************/
+        [ctxdata, ctxpr, ctxroc].forEach(function(ctx){
+            ctx.textAlign = 'right';
+            ctx.font = "12px serif";
+            ctx.fillStyle = 'black';
+        })
+
+        drawCS(ctxdata)
+        ctxdata.textBaseline = 'bottom';
+        ctxdata.fillText('GT ', ...toPlot([0,1.05]));
+        ctxdata.textBaseline = 'middle';
+        ctxdata.fillText('positive ', ...toPlot([0,1]));
+        ctxdata.fillText('negative ', ...toPlot([0,0]));
+        ctxdata.textBaseline = 'top'
+        ctxdata.textAlign = 'left'
+        ctxdata.fillText('prediction', ...toPlot([1.05,-0.01]));
+        ctxdata.fillText('0', ...toPlot([0,-0.01]));
+        ctxdata.fillText('1', ...toPlot([1,-0.01]));
+
+        // draw data histograms
+        let binned = [new Array(histBinCount).fill(0),new Array(histBinCount).fill(0)];
+        for(var label=0; label<=1; label++){
+            data.forEach(function(p){
+                let ind = (p[0]*histBinCount - 1e-12)|0; 
+                binned[p[1]][ind] += 1;
+            });
+        }
+        let binsMax = Math.max(...binned[0], ...binned[1]);
+        binned.forEach(function(bins, label){
+            ctxdata.fillStyle = color.hists[label];
+            bins.forEach(function(b, idx){
+                ctxdata.fillRect(
+                    ...toPlot([idx/histBinCount, label]),
+                    ...toPlot([1/histBinCount, (1-2*label)*0.5*b/binsMax], 0)
+                )
+            })
+        })
+
+
+        /*********************************
+        * PR Plot
+        *********************************/
+
+        drawCS(ctxpr)
+        ctxpr.textBaseline = 'bottom'
+        ctxpr.fillText('precision ', ...toPlot([0,1.05]));
+        ctxpr.textBaseline = 'middle'
+        ctxpr.fillText('0', ...toPlot([-0.01,0]));
+        ctxpr.fillText('1', ...toPlot([-0.01,1]));
+        ctxpr.textAlign = 'left'
+        ctxpr.textBaseline = 'top'
+        ctxpr.fillText('recall', ...toPlot([1.05,-0.01]));
+        ctxpr.fillText('0', ...toPlot([0,-0.01]));
+        ctxpr.fillText('1', ...toPlot([1,-0.01]));
+        ctxpr.textBaseline = 'bottom'
+        ctxpr.fillText(` prevalence`, ...toPlot([1,metrics.prevalence]));
+        ctxpr.textBaseline = 'top'
+        ctxpr.fillText(` ${metrics.prevalence.toFixed(3)}`, ...toPlot([1,metrics.prevalence]));
+
+        if(checkboxf1.checked){
+            /*********************************
+            * PR: F1 lines
+            *********************************/
+            /* Fscore lines in PR
+             * Fbeta = (beta^2 + 1) * precision * recall /((beta^2 * precision) + recall
+             * F = (b^2 + 1) * y * x/((b^2 * y) + x)
+             * y = F*x/((b^2 + 1)*x - F*b^2)
+             * x = b^2 * F * y / (b^2 * y - F + y)
+             */
+            let beta = 1;
+            for(let fscore100=10; fscore100<=90; fscore100+=10){
+                let accColor = getAccColor(fscore100);
+                //console.log(accColor);
+                ctxpr.beginPath()
+                ctxpr.strokeStyle = `lab(from ${accColor} L a b / 1.0)`; //'#888';
+                ctxpr.lineWidth = 2;
+                ctxpr.setLineDash([4, 2, 10, 2]);
+                let points = [];
+                let f = 0.01*fscore100;
+                // sample curve in equal x-increments
+                for(let t=beta**2*f/(beta**2+1-f); t<=1; t+=0.01){
+                    points.push([t, 1/((1+beta**2)/f - beta**2/t)]);
+                }
+                // sample curve in equal y-increments
+                for(let t=f/(1-beta**2*(f-1)); t<=0; t-=0.01){
+                    points.push([(1/beta**2)/((1+beta**2)/f - 1/t), t]);
+                }
+                points.sort((p,q)=> p[0]-q[0]); //join curves
+                if(points.length == 0){
+                    continue;
+                }
+                ctxdata.beginPath()
+                ctxpr.moveTo(...toPlot(points[0]));
+                points.forEach(function(p){
+                    ctxpr.lineTo(...toPlot(p));
+                    //ctxpr.fillRect(...toPlot(p), ...toPlot([0.01, 0.01], false));
+                })
+                ctxpr.stroke()
+                ctxpr.fillStyle = getComputedStyle(document.querySelector('body')).backgroundColor; 
+                //ctxpr.fillStyle = 'red';
+                const r = 0.05;
+                console.log('length')
+                //heuristic for f-score label position: map beta to the segments (0,0)--(0.5, 0), and (0,0)--(0,0.5)
+                //then interpolate from that pont to (1,1) linearly with f-score
+                let betat = Math.tanh(Math.log(beta))/2
+                let startpoint = [(betat < 0 ? -betat : 0), (betat > 0 ? betat : 0)];
+                let midpoint = [startpoint[0]*(1-f)+1*f, startpoint[1]*(1-f)+1*f];
+                ctxpr.fillRect(...toPlot([midpoint[0]-r, midpoint[1]-0.5*r]), ...toPlot([2*r, r], false));
+                ctxpr.textBaseline = 'middle';
+                ctxpr.textAlign = 'center';
+                ctxpr.fillStyle = accColor;             
+                ctxpr.fillText(`0.${fscore100}`, ...toPlot(midpoint));
+            }
+        }//checkbox
+
+
+        //random classifier line PR
+        ctxpr.beginPath()
+        ctxpr.strokeStyle = 'black dashed';
+        ctxpr.lineWidth = 2;
+        ctxpr.setLineDash([2, 4]);
+        const pos_rel = positive/(positive+negative);
+        ctxpr.moveTo(...toPlot([0,pos_rel]));
+        ctxpr.lineTo(...toPlot([1,pos_rel]));
+        ctxpr.stroke()
+
+        /*********************************
+        * ROC
+        *********************************/
+        drawCS(ctxroc)
+
+        ctxroc.beginPath()
+        ctxroc.textBaseline = 'top'
+        /*
+        //random classifier line ROC
+        ctxroc.strokeStyle = 'black dashed';
+        ctxroc.lineWidth = 2;
+        ctxroc.setLineDash([2, 4]);
+        ctxroc.moveTo(...toPlot([0,0]));
+        ctxroc.lineTo(...toPlot([1,1]));
+        ctxroc.stroke()
+        //*/
+
+        ctxroc.textBaseline = 'bottom'
+        ctxroc.fillText('TPR ', ...toPlot([0,1.05]));
+        ctxroc.textBaseline = 'middle'
+        ctxroc.fillText('0', ...toPlot([-0.01,0]));
+        ctxroc.fillText('1', ...toPlot([-0.01,1]));
+        ctxroc.textAlign = 'left'
+        ctxroc.textBaseline = 'top'
+        ctxroc.fillText('FPR', ...toPlot([1.05,-0.01]));
+        ctxroc.fillText('0', ...toPlot([0,-0.01]));
+        ctxroc.fillText('1', ...toPlot([1,-0.01]));
+
+        if(checkboxacc.checked){
+            /*********************************
+            * ROC: Accuracy Lines
+            *********************************/
+            /* accuracy lines in ROC
+             * ACC = PREVA * TPR +(1-PREVA)*(1-FPR)
+             * A  = P * y + (1-P) * (1-x)
+             * y = (A - P*x + P + x - 1)/P and P!=0
+             * x = (A - P*y + P - 1)/(P - 1) and P!=1
+             */
+            for(let acc100=10; acc100<=90; acc100+=10){
+                let A = acc100/100, P = metrics.prevalence;
+                let y0 = [(A + P - 1)/(P - 1), 0];
+                let y1 = [(A - 1)/(P - 1), 1];
+                let x0 = [0, (A + P - 1)/P];
+                let x1 = [1, A/P];
+                // intersect with bottom y=0 and left x=0 (find closer pont)
+                // intersect with top y=1 and right x=1 (find closer point)
+                let x0y0 = y0[0]>0 ? y0 : x0;
+                let x1y1 = y1[0]<1 ? y1 : x1;
+                let accColor = getAccColor(acc100);
+                //console.log(accColor);
+                ctxroc.beginPath()
+                ctxroc.strokeStyle = `lab(from ${accColor} L a b / 1.0)`; //'#888';
+                ctxroc.lineWidth = 2;
+                ctxroc.setLineDash([4, 2, 10, 2]);
+                ctxroc.moveTo(...toPlot(x0y0));
+                ctxroc.lineTo(...toPlot(x1y1));
+                ctxroc.stroke()
+                ctxroc.fillStyle = getComputedStyle(document.querySelector('body')).backgroundColor; ;
+                const r = 0.05;
+                ctxroc.fillRect(...toPlot([1-A-r, A-0.5*r]), ...toPlot([2*r, r], false));
+                ctxroc.textBaseline = 'middle';
+                ctxroc.textAlign = 'center';
+                ctxroc.fillStyle = accColor;             
+                ctxroc.fillText(`${acc100}\%`, ...toPlot([1-A, A]));
+            }
+        }//checkbox
+        
+        /**************************
+        * plot data points
+        **************************/
+        let r = 3;
+        data.forEach(function(d){
+            ctxdata.beginPath()
+            //ctxdata.fillStyle = [color.tn, color.fp, color.fn, color.tp][(d[0]>=threshold)+2*d[1]];
+            //ctxdata.fillStyle = `rgba(from ${ctxdata.fillStyle} r g b / 0.2)`
+            ctxdata.lineWidth = 1;
+            ctxdata.strokeStyle = [color.tn, color.fp, color.fn, color.tp][(d[0]>=threshold)+2*d[1]];
+            //ctxdata.strokeStyle = `rgba(from ${ctxdata.fillStyle} r g b / 0.2)`
+            ctxdata.moveTo(...toPlot([d[0], d[1]-0.02]))
+            ctxdata.lineTo(...toPlot([d[0], d[1]+0.02]))
+            ctxdata.stroke()
+            /* draw dots
+            ctxdata.moveTo(...toPlot(d))
+            ctxdata.arc(...toPlot(d), 8, 0, 2*Math.PI);
+            ctxdata.fill()
+            */
+        })
+        // plot threshold
+        ctxdata.beginPath()
+        ctxdata.lineWidth = 5;
+        ctxdata.strokeStyle = color.threshold;
+        ctxdata.moveTo(...toPlot([threshold, 0]));
+        ctxdata.lineTo(...toPlot([threshold, 1]));
+        ctxdata.stroke()
+
+        // actually draw roc curve ///////////////////////////////////////////////////////
+        let roc = metrics.roc_curve;
+        // auroc area
+        ctxroc.beginPath()
+        ctxroc.lineWidth = 0;
+        ctxroc.moveTo(...toPlot([0, 0]));
+        roc.forEach(p=>ctxroc.lineTo(...toPlot([p[0], p[1]])));
+        ctxroc.lineTo(...toPlot([1, 1]));
+        ctxroc.lineTo(...toPlot([1, 0]));
+        ctxroc.closePath()
+        ctxroc.fillStyle = color.auc;
+        ctxroc.fill()
+
+        // roc curve
+        ctxroc.beginPath()
+        ctxroc.lineWidth = color.curveLineWidth;
+        ctxroc.strokeStyle = color.curve;
+        ctxroc.setLineDash([]);
+        ctxroc.moveTo(...toPlot([0, 0]));
+        roc.forEach(p=>ctxroc.lineTo(...toPlot([p[0], p[1]])));
+        ctxroc.stroke()
+
+        // draw roc points
+        ctxroc.beginPath()
+        ctxroc.strokeStyle = color.points;
+        ctxroc.fillStyle = color.points;
+        roc.forEach(function(p){
+            let point = toPlot([p[0], p[1]]);
+            ctxroc.moveTo(...point);
+            ctxroc.arc(...point, color.curvePointRadius, 0, 2*Math.PI);
+        })
+        ctxroc.fill()
+
+        //interpolate ROC curve
+        ctxroc.beginPath()
+        ctxroc.fillStyle = color.threshold;
+        let point = [
+            interpolate(threshold, roc.map(x=>x[2]), roc.map(x=>x[0])),
+            interpolate(threshold, roc.map(x=>x[2]), roc.map(x=>x[1]))
+            ];
+        ctxroc.arc(...toPlot(point), color.thresholdPointRadius, 0, 2*Math.PI);
+        ctxroc.fill()
+
+        // actually draw PR curve /////////////////////////////////////////////////////
+        let pr = metrics.pr_curve;
+        // aurpr area
+        ctxpr.beginPath()
+        ctxpr.lineWidth = 0;
+        ctxpr.moveTo(...toPlot([0, 0]));
+        pr.forEach(p=>ctxpr.lineTo(...toPlot([p[0], p[1]])));
+        ctxpr.lineTo(...toPlot([1, 1]));
+        ctxpr.lineTo(...toPlot([1, 0]));
+        ctxpr.closePath()
+        ctxpr.fillStyle = color.auc;
+        ctxpr.fill()
+
+        // draw curve
+        ctxpr.beginPath()
+        ctxpr.lineWidth = color.curveLineWidth;
+        ctxpr.strokeStyle = color.curve,
+        ctxpr.fillStyle = color.curve;
+        ctxpr.setLineDash([]);
+        ctxpr.moveTo(...toPlot([0, 1]));
+        pr.forEach(p=>ctxpr.lineTo(...toPlot([p[0], p[1]])));
+
+        ctxpr.stroke()
+        // draw pr points
+        ctxpr.beginPath()
+        ctxpr.strokeStyle = color.points;
+        ctxpr.fillStyle = color.points;
+        pr.forEach(function(p){
+                        let point = toPlot([p[0], p[1]]);
+                        ctxpr.moveTo(...point);
+                        ctxpr.arc(...point, color.curvePointRadius, 0, 2*Math.PI);
+                    })
+        ctxpr.fill()
+        ctxpr.beginPath()
+        ctxpr.fillStyle = color.threshold;
+        point = [
+                        interpolate(threshold, pr.map(x=>x[2]), pr.map(x=>x[0])),
+                        interpolate(threshold, pr.map(x=>x[2]), pr.map(x=>x[1]))
+                        ];
+        ctxpr.arc(...toPlot(point), color.thresholdPointRadius, 0, 2*Math.PI);
+        ctxpr.fill()
+        
+        ///////////////////////////////////////////////////////////////////////////////
+        // update metrics table
+        ///////////////////////////////////////////////////////////////////////////////
+        //console.log(metrics);
+        ctxdata.textBaseline = 'middle'
+        ctxdata.textAlign = 'left'
+        ctxdata.fillStyle = color.tp;
+        ctxdata.fillText(` TP ${metrics.tp} `, ...toPlot([threshold, 0.9]));
+        ctxdata.textAlign = 'right'
+        ctxdata.fillStyle = color.fn;
+        ctxdata.fillText(` FN ${metrics.fn} `, ...toPlot([threshold, 0.9]));
+        ctxdata.textAlign = 'left'
+        ctxdata.fillStyle = color.fp;
+        ctxdata.fillText(` FP ${metrics.fp} `, ...toPlot([threshold, 0.1]));
+        ctxdata.textAlign = 'right'
+        ctxdata.fillStyle = color.tn;
+        ctxdata.fillText(` TN ${metrics.tn} `, ...toPlot([threshold, 0.1]));
+
+        // metrics table
+
+        document.getElementById('metricacc').style.backgroundColor = checkboxacc.checked ? 
+                getAccColor(metrics.acc*100) : '';
+        document.getElementById('metricacc')      .innerHTML = metrics.acc      .toFixed(3);
+        document.getElementById('metricfpr')      .innerHTML = metrics.fpr      .toFixed(3);
+        document.getElementById('metrictpr')      .innerHTML = metrics.tpr      .toFixed(3);
+        document.getElementById('metricprecision').innerHTML = metrics.precision.toFixed(3);
+        document.getElementById('metricrecall')   .innerHTML = metrics.recall   .toFixed(3);
+        document.getElementById('metricf1')       .innerHTML = metrics.f1       .toFixed(3);
+        document.getElementById('metricf1').style.backgroundColor = checkboxf1.checked ? 
+                getAccColor(metrics.f1*100) : '';
+        document.getElementById('metricauroc')    .innerHTML = metrics.auroc    .toFixed(3);
+        document.getElementById('metricaupr')     .innerHTML = metrics.aupr     .toFixed(3);
+    }
+    function createRadioChangeHandler(radio){
+        return function(e){
+            console.log('radiobutton changed: ', radio.name, radio.value)
+            if(radio.value == 0){
+                return;
+            }
+            let v = {t:0.5, p:50, n:50, pw:0.5, nw:0.5, pp:1, np:0};
+            switch(parseInt(radio.value)){
+                case 2: // worse than random
+                    v = {t:0.5, p:50, n:50, pw:0.7, nw:0.7, pp:0, np:1};
+                    break;
+                case 3: // high prevalence
+                    v = {t:0.5, p:100, n:5, pw:0.7, nw:0.7, pp:0.5, np:0.5};
+                    break;
+                case 4: // non-separable
+                    v = {t:0.3, p:30, n:30, pw:0.5, nw:0.5, pp:0.5, np:0.5};
+                    break;
+                case 5: // 
+                    v = {t:0.4, p:50, n:50, pw:0.5, nw:0.5, pp:1, np:0};
+                    break;
+                case 6: // 
+                    v = {t:0.5, p:50, n:50, pw:0.5, nw:0.5, pp:1, np:0};
+                    break;
+                case 1: // perfect separability
+                default:
+                    v = {t:0.5, p:50, n:50, pw:0.5, nw:0.5, pp:1, np:0};
+                    break;
+            }
+            sliderthreshold.value = v.t;
+            sliderpositive.value = v.p;
+            sliderpositivewidth.value = v.pw;
+            sliderpositiveposition.value = v.pp;
+            slidernegative.value = v.n;
+            slidernegativewidth.value = v.nw;
+            slidernegativeposition.value = v.np;
+            handleSliderChange('radio');
+        }
+    }
+
+    // Add event listeners to sliders
+    sliderthreshold       .addEventListener('input', ()=>handleSliderChange('threshold'       ));  
+    sliderseed            .addEventListener('input', ()=>handleSliderChange('seed'            ));
+    slidernegative        .addEventListener('input', ()=>handleSliderChange('negative'        ));
+    slidernegativewidth   .addEventListener('input', ()=>handleSliderChange('negativewidth'   ));
+    slidernegativeposition.addEventListener('input', ()=>handleSliderChange('negativeposition'));
+    sliderpositive        .addEventListener('input', ()=>handleSliderChange('positive'        ));
+    sliderpositivewidth   .addEventListener('input', ()=>handleSliderChange('positivewidth'   ));
+    sliderpositiveposition.addEventListener('input', ()=>handleSliderChange('positiveposition'));
+    sliderbalance         .addEventListener('input', ()=>handleSliderChange('balance'         ));
+    slidersamples         .addEventListener('input', ()=>handleSliderChange('samples'         ));   
+    checkboxacc           .addEventListener('input', ()=>handleSliderChange('checkboxacc'     ));   
+    checkboxf1            .addEventListener('input', ()=>handleSliderChange('checkboxf1'      ));   
+
+    [...document.getElementsByName('preset')].forEach(
+        radio => radio.addEventListener('change', createRadioChangeHandler(radio))
+    )
+    handleSliderChange()
+    console.log('done')
+</script>
+
+</body>
+</html>
